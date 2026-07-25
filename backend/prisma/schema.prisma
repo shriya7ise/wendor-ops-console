@@ -1,0 +1,471 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ──────────────────────────────────────────────────────────
+// Enums
+// ──────────────────────────────────────────────────────────
+
+enum POStatus {
+  DRAFT
+  ORDERED
+  PARTIAL
+  RECEIVED
+  CANCELLED
+}
+
+enum ExportType {
+  EMPLOYEE_REPORT
+  SCHEDULED_REPORT
+  TRANSACTION_DOWNLOAD
+  WALLET_USER_DOWNLOAD
+  ATTENDANCE_EXPORT
+  MACHINE_LOCATIONS
+  SUPPLIER_ANALYSIS
+}
+
+enum ExportStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+}
+
+enum ScheduleFrequency {
+  DAILY
+  WEEKLY
+  MONTHLY
+}
+
+enum TransactionStatus {
+  COMPLETED
+  FAILED
+  REFUNDED
+}
+
+enum MachineStatus {
+  ONLINE
+  OFFLINE
+  MAINTENANCE
+}
+
+enum ShipmentStatus {
+  PENDING
+  IN_TRANSIT
+  DELIVERED
+  DELAYED
+}
+
+enum LedgerEntryType {
+  INBOUND
+  OUTBOUND
+  ADJUSTMENT
+}
+
+// ──────────────────────────────────────────────────────────
+// Core org / catalog
+// ──────────────────────────────────────────────────────────
+
+model Organisation {
+  id             String          @id @default(uuid())
+  name           String
+  suppliers      Supplier[]
+  warehouses     Warehouse[]
+  machines       Machine[]
+  clusters       Cluster[]
+  brands         Brand[]
+  employees      Employee[]
+  walletUsers    WalletUser[]
+  refills        Refill[]
+  transactions   Transaction[]
+  attendances    Attendance[]
+  failureEvents  FailureEvent[]
+  shipments      Shipment[]
+  exportJobs     ExportJob[]
+  reportSchedules ReportSchedule[]
+  ledgerEntries  WarehouseLedgerEntry[]
+  stockLevels    WarehouseStock[]
+  createdAt      DateTime        @default(now())
+}
+
+model Supplier {
+  id             String          @id @default(uuid())
+  orgId          String
+  org            Organisation    @relation(fields: [orgId], references: [id])
+  name           String
+  code           String?
+  contactEmail   String?
+  contactPhone   String?
+  isActive       Boolean         @default(true)
+  purchaseOrders PurchaseOrder[]
+  refills        Refill[]
+  shipments      Shipment[]
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+
+  @@unique([orgId, code])
+  @@index([orgId, name])
+}
+
+model Warehouse {
+  id             String          @id @default(uuid())
+  orgId          String
+  org            Organisation    @relation(fields: [orgId], references: [id])
+  name           String
+  code           String?
+  purchaseOrders PurchaseOrder[]
+  refills        Refill[]
+  shipments      Shipment[]
+  ledgerEntries  WarehouseLedgerEntry[]
+  stockLevels    WarehouseStock[]
+
+  @@unique([orgId, code])
+}
+
+model Cluster {
+  id       String    @id @default(uuid())
+  orgId    String
+  org      Organisation @relation(fields: [orgId], references: [id])
+  name     String
+  machines Machine[]
+  attendances Attendance[]
+
+  @@unique([orgId, name])
+}
+
+model Brand {
+  id       String    @id @default(uuid())
+  orgId    String
+  org      Organisation @relation(fields: [orgId], references: [id])
+  name     String
+  products Product[]
+
+  @@unique([orgId, name])
+}
+
+model Product {
+  id        String              @id @default(uuid())
+  sku       String              @unique
+  name      String
+  category  String?
+  unitPrice Decimal             @default(0) @db.Decimal(12, 2)
+  brandId   String?
+  brand     Brand?              @relation(fields: [brandId], references: [id])
+  poItems   PurchaseOrderItem[]
+  refills   Refill[]
+  transactions Transaction[]
+  ledgerEntries WarehouseLedgerEntry[]
+  stockLevels   WarehouseStock[]
+}
+
+model Machine {
+  id        String         @id @default(uuid())
+  orgId     String
+  org       Organisation   @relation(fields: [orgId], references: [id])
+  name      String
+  code      String?
+  clusterId String?
+  cluster   Cluster?       @relation(fields: [clusterId], references: [id])
+  lat       Float?
+  lng       Float?
+  status    MachineStatus  @default(ONLINE)
+  refills   Refill[]
+  transactions Transaction[]
+  failureEvents FailureEvent[]
+
+  @@unique([orgId, code])
+}
+
+model Employee {
+  id           String        @id @default(uuid())
+  orgId        String
+  org          Organisation  @relation(fields: [orgId], references: [id])
+  name         String
+  email        String?
+  role         String?
+  transactions Transaction[]
+  attendances  Attendance[]
+  refills      Refill[]
+
+  @@index([orgId, name])
+}
+
+model WalletUser {
+  id             String       @id @default(uuid())
+  orgId          String
+  org            Organisation @relation(fields: [orgId], references: [id])
+  name           String
+  phone          String?
+  balance        Decimal      @default(0) @db.Decimal(12, 2)
+  lastActivityAt DateTime?
+
+  @@index([orgId, name])
+}
+
+// ──────────────────────────────────────────────────────────
+// Procurement
+// ──────────────────────────────────────────────────────────
+
+model PurchaseOrder {
+  id          String              @id @default(uuid())
+  poNumber    String
+  supplierId  String
+  supplier    Supplier            @relation(fields: [supplierId], references: [id])
+  warehouseId String?
+  warehouse   Warehouse?          @relation(fields: [warehouseId], references: [id])
+  status      POStatus            @default(DRAFT)
+  // Approval step: when a PO moves from DRAFT to an approved-to-order state.
+  // approvalDelayMinutes = approvedAt - createdAt, powers the Org Procurement
+  // "Approval Delay" chart. Nullable — POs auto-approved or still pending
+  // approval won't have a value yet.
+  approvedAt    DateTime?
+  approvedBy    String?
+  orderedAt   DateTime?
+  expectedAt  DateTime?
+  receivedAt  DateTime?
+  cancelledAt DateTime?
+  items       PurchaseOrderItem[]
+  createdAt   DateTime            @default(now())
+  updatedAt   DateTime            @updatedAt
+
+  @@unique([supplierId, poNumber])
+  @@index([supplierId, orderedAt])
+  @@index([warehouseId, orderedAt])
+  @@index([supplierId, approvedAt])
+}
+
+model PurchaseOrderItem {
+  id              String        @id @default(uuid())
+  purchaseOrderId String
+  purchaseOrder   PurchaseOrder @relation(fields: [purchaseOrderId], references: [id], onDelete: Cascade)
+  productId       String
+  product         Product       @relation(fields: [productId], references: [id])
+  orderedQty      Int
+  receivedQty     Int           @default(0)
+  unitCost        Decimal       @db.Decimal(12, 2)
+
+  @@index([purchaseOrderId])
+  @@index([productId])
+}
+
+// ──────────────────────────────────────────────────────────
+// Refills (machine restocking events)
+// ──────────────────────────────────────────────────────────
+
+model Refill {
+  id          String       @id @default(uuid())
+  orgId       String
+  org         Organisation @relation(fields: [orgId], references: [id])
+  machineId   String
+  machine     Machine      @relation(fields: [machineId], references: [id])
+  supplierId  String?
+  supplier    Supplier?    @relation(fields: [supplierId], references: [id])
+  warehouseId String?
+  warehouse   Warehouse?   @relation(fields: [warehouseId], references: [id])
+  productId   String
+  product     Product      @relation(fields: [productId], references: [id])
+  // Who physically performed the refill trip — powers Refill Operations'
+  // Unique Refillers/Regularity Leaderboard and User Analytics' refill
+  // trip count. Nullable because historical refills may predate this field
+  // (e.g. imported from a system that didn't track it); backfill where possible.
+  employeeId  String?
+  employee    Employee?    @relation(fields: [employeeId], references: [id])
+  quantity    Int
+  eventAt     DateTime
+
+  @@index([supplierId, eventAt])
+  @@index([machineId, eventAt])
+  @@index([warehouseId, eventAt])
+  @@index([employeeId, eventAt])
+}
+
+// ──────────────────────────────────────────────────────────
+// Warehouse stock ledger
+// Backs Org Warehouses Analytics (1.9.12) and gives Org Inventory Risk
+// (1.9.13) a real stock-on-hand model instead of the supplier-fill-rate
+// approximation. Every inbound/outbound/adjustment movement is one row;
+// WarehouseStock is the current on-hand snapshot per warehouse+product,
+// kept in sync by whatever process writes ledger entries (PO receipt,
+// refill dispatch, manual adjustment, etc.).
+// ──────────────────────────────────────────────────────────
+
+model WarehouseLedgerEntry {
+  id            String          @id @default(uuid())
+  orgId         String
+  org           Organisation    @relation(fields: [orgId], references: [id])
+  warehouseId   String
+  warehouse     Warehouse       @relation(fields: [warehouseId], references: [id])
+  productId     String?
+  product       Product?        @relation(fields: [productId], references: [id])
+  type          LedgerEntryType
+  quantity      Int
+  // Free-text source of the movement, e.g. "PO Receipt", "Refill Dispatch",
+  // "Cycle Count Correction" — feeds the Inbound/Refill-Supply By Warehouse
+  // breakdowns.
+  reason        String?
+  // Loose reference back to the originating record (PurchaseOrder, Refill,
+  // ...) without a hard FK, since a ledger entry can originate from several
+  // different tables.
+  referenceType String?
+  referenceId   String?
+  // Flagged when a movement doesn't reconcile against expected quantity
+  // (e.g. received qty != ordered qty, or a manual adjustment with no
+  // reason code) — powers the "Ledger Anomalies" widget directly rather
+  // than recomputing anomaly detection on every read.
+  isAnomaly     Boolean         @default(false)
+  occurredAt    DateTime
+  createdAt     DateTime        @default(now())
+
+  @@index([orgId, occurredAt])
+  @@index([warehouseId, occurredAt])
+  @@index([productId, occurredAt])
+  @@index([orgId, isAnomaly])
+}
+
+model WarehouseStock {
+  id          String       @id @default(uuid())
+  orgId       String
+  org         Organisation @relation(fields: [orgId], references: [id])
+  warehouseId String
+  warehouse   Warehouse    @relation(fields: [warehouseId], references: [id])
+  productId   String
+  product     Product      @relation(fields: [productId], references: [id])
+  onHand      Int          @default(0)
+  allocated   Int          @default(0)
+  // Reorder point — below this, "available" (onHand - allocated) is LOW;
+  // at or below 0 it's OUT. Severity itself is computed at query time so it
+  // never drifts out of sync with onHand/allocated/threshold.
+  threshold   Int          @default(0)
+  updatedAt   DateTime     @updatedAt
+
+  @@unique([warehouseId, productId])
+  @@index([orgId, warehouseId])
+  @@index([productId])
+}
+
+// ──────────────────────────────────────────────────────────
+// Sales
+// ──────────────────────────────────────────────────────────
+
+model Transaction {
+  id            String             @id @default(uuid())
+  orgId         String
+  org           Organisation       @relation(fields: [orgId], references: [id])
+  machineId     String
+  machine       Machine            @relation(fields: [machineId], references: [id])
+  employeeId    String?
+  employee      Employee?          @relation(fields: [employeeId], references: [id])
+  productId     String
+  product       Product            @relation(fields: [productId], references: [id])
+  quantity      Int
+  amount        Decimal            @db.Decimal(12, 2)
+  paymentMethod String?
+  status        TransactionStatus  @default(COMPLETED)
+  createdAt     DateTime           @default(now())
+
+  @@index([orgId, createdAt])
+  @@index([machineId, createdAt])
+  @@index([employeeId, createdAt])
+}
+
+// ──────────────────────────────────────────────────────────
+// Workforce
+// ──────────────────────────────────────────────────────────
+
+model Attendance {
+  id         String       @id @default(uuid())
+  orgId      String
+  org        Organisation @relation(fields: [orgId], references: [id])
+  employeeId String
+  employee   Employee     @relation(fields: [employeeId], references: [id])
+  clusterId  String?
+  cluster    Cluster?     @relation(fields: [clusterId], references: [id])
+  checkIn    DateTime
+  checkOut   DateTime?
+
+  @@index([orgId, checkIn])
+  @@index([employeeId, checkIn])
+}
+
+// ──────────────────────────────────────────────────────────
+// Reliability / logistics
+// ──────────────────────────────────────────────────────────
+
+model FailureEvent {
+  id          String       @id @default(uuid())
+  orgId       String
+  org         Organisation @relation(fields: [orgId], references: [id])
+  machineId   String
+  machine     Machine      @relation(fields: [machineId], references: [id])
+  // Which vending slot the failure occurred at — powers the "Slots" tab and
+  // the Slot vs. Failures chart. Nullable: some failures (e.g. connectivity,
+  // whole-machine power loss) aren't tied to one slot.
+  slot        String?
+  failureType String
+  reportedAt  DateTime
+  resolvedAt  DateTime?
+
+  @@index([orgId, reportedAt])
+  @@index([machineId, reportedAt])
+  @@index([orgId, slot])
+}
+
+model Shipment {
+  id          String         @id @default(uuid())
+  orgId       String
+  org         Organisation   @relation(fields: [orgId], references: [id])
+  warehouseId String?
+  warehouse   Warehouse?     @relation(fields: [warehouseId], references: [id])
+  supplierId  String?
+  supplier    Supplier?      @relation(fields: [supplierId], references: [id])
+  status      ShipmentStatus @default(PENDING)
+  dispatchedAt DateTime?
+  expectedAt   DateTime?
+  deliveredAt  DateTime?
+
+  @@index([orgId, status])
+}
+
+// ──────────────────────────────────────────────────────────
+// Reports / Exports
+// ──────────────────────────────────────────────────────────
+
+model ExportJob {
+  id           String       @id @default(uuid())
+  orgId        String
+  org          Organisation @relation(fields: [orgId], references: [id])
+  type         ExportType
+  requestedBy  String
+  filters      Json?
+  status       ExportStatus @default(PENDING)
+  fileUrl      String?
+  rowCount     Int?
+  errorMessage String?
+  startedAt    DateTime?
+  completedAt  DateTime?
+  createdAt    DateTime     @default(now())
+
+  @@index([orgId, type, createdAt])
+  @@index([orgId, status])
+}
+
+model ReportSchedule {
+  id         String            @id @default(uuid())
+  orgId      String
+  org        Organisation      @relation(fields: [orgId], references: [id])
+  type       ExportType
+  frequency  ScheduleFrequency
+  filters    Json?
+  recipients String[]
+  isActive   Boolean           @default(true)
+  lastRunAt  DateTime?
+  nextRunAt  DateTime?
+  createdAt  DateTime          @default(now())
+
+  @@index([orgId, isActive])
+}
