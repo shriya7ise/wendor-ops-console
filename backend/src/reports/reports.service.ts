@@ -1,3 +1,4 @@
+// reports.service.ts
 import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateExportDto, ListExportsQueryDto } from './dto/export.dto';
@@ -14,19 +15,30 @@ export class ReportsService {
 
   constructor(private readonly prisma: PrismaService) {}
 
-  /** Creates and (fire-and-forget) processes an ExportJob. Used both by the
+  /** Creates an ExportJob and kicks off processing. Used both by the
    *  on-demand `/reports/exports` endpoint and by ScheduledReportsCronService
    *  when a due ReportSchedule fires — same job row, same status machine,
-   *  just a different `requestedBy` ("scheduler" vs. a real user id). */
-  async create(orgId: string, requestedBy: string, dto: CreateExportDto) {
+   *  just a different `requestedBy` ("scheduler" vs. a real user id).
+   *
+   *  awaitProcessing:
+   *  - false (default, used by the on-demand endpoint): fire-and-forget —
+   *    the HTTP call returns immediately with the PENDING job row, and the
+   *    UI polls /reports/exports for status. Correct for a user-facing
+   *    "start export" button.
+   *  - true (used by the cron): the caller awaits the full generation
+   *    before moving on. This lets the cron control how many exports run
+   *    concurrently (see scheduled-reports.cron.ts's batching) instead of
+   *    firing every due schedule's export at once. */
+  async create(orgId: string, requestedBy: string, dto: CreateExportDto, awaitProcessing = false) {
     const job = await this.prisma.exportJob.create({
       data: { orgId, requestedBy, type: dto.type, filters: (dto.filters ?? {}) as Prisma.InputJsonValue, status: 'PENDING' },
     });
 
-    // Fire-and-forget. In production, swap this for a BullMQ/SQS producer —
-    // the job row + status machine below already matches that shape, so
-    // the only change is who calls `process()`.
-    this.process(job.id).catch((err) => this.logger.error(`Export ${job.id} failed`, err));
+    const run = this.process(job.id).catch((err) => this.logger.error(`Export ${job.id} failed`, err));
+
+    if (awaitProcessing) {
+      await run;
+    }
 
     return job;
   }

@@ -1,6 +1,20 @@
+// export-generators.ts
 import { PrismaService } from '../prisma/prisma.service';
 import { toCsv } from './csv.util';
 import { classifyAttendance } from '../common/analytics.util';
+
+// Hard ceiling on rows pulled per export. Without this, an org with years
+// of transaction/attendance history and no date filter selected turns into
+// an unbounded findMany() with multi-table includes — a single slow query
+// that holds a DB connection for a long time. Combined with several exports
+// running concurrently, that's what was exhausting the connection pool.
+// Callers can still override via filters.maxRows for a specific export.
+const DEFAULT_MAX_ROWS = 50_000;
+
+function rowLimit(filters: Record<string, any>): number {
+  const n = Number(filters.maxRows);
+  return Number.isFinite(n) && n > 0 ? Math.min(n, DEFAULT_MAX_ROWS) : DEFAULT_MAX_ROWS;
+}
 
 /** One generator per ExportType. Each takes the org + the filters the user
  *  had selected on the source screen and returns CSV text + a row count.
@@ -16,11 +30,15 @@ export async function generateExport(
       ? { [field]: { ...(filters.from ? { gte: new Date(filters.from) } : {}), ...(filters.to ? { lte: new Date(filters.to) } : {}) } }
       : {};
 
+  const take = rowLimit(filters);
+
   switch (type) {
     case 'SUPPLIER_ANALYSIS': {
       const pos = await prisma.purchaseOrder.findMany({
         where: { supplier: { orgId }, ...(filters.supplierId ? { supplierId: filters.supplierId } : {}), ...dateFilter('orderedAt') },
         include: { supplier: true, items: true },
+        orderBy: { orderedAt: 'desc' },
+        take,
       });
       const rows = pos.map((po) => ({
         poNumber: po.poNumber,
@@ -39,6 +57,7 @@ export async function generateExport(
         where: { orgId, ...(filters.machineId ? { machineId: filters.machineId } : {}), ...dateFilter('createdAt') },
         include: { machine: true, product: true, employee: true },
         orderBy: { createdAt: 'desc' },
+        take,
       });
       const rows = tx.map((t) => ({
         date: t.createdAt.toISOString(),
@@ -54,7 +73,11 @@ export async function generateExport(
     }
 
     case 'WALLET_USER_DOWNLOAD': {
-      const users = await prisma.walletUser.findMany({ where: { orgId } });
+      const users = await prisma.walletUser.findMany({
+        where: { orgId },
+        orderBy: { lastActivityAt: 'desc' },
+        take,
+      });
       const rows = users.map((u) => ({
         name: u.name,
         phone: u.phone ?? '',
@@ -73,6 +96,7 @@ export async function generateExport(
         },
         include: { employee: true, cluster: true },
         orderBy: filters.variant === 'register' ? [{ cluster: { name: 'asc' } }, { employee: { name: 'asc' } }] : { checkIn: 'desc' },
+        take,
       });
 
       // Two distinct outputs off the same underlying data, per spec:
@@ -103,7 +127,12 @@ export async function generateExport(
     }
 
     case 'MACHINE_LOCATIONS': {
-      const machines = await prisma.machine.findMany({ where: { orgId }, include: { cluster: true } });
+      const machines = await prisma.machine.findMany({
+        where: { orgId },
+        include: { cluster: true },
+        orderBy: { name: 'asc' },
+        take,
+      });
       const rows = machines.map((m) => ({
         name: m.name,
         code: m.code ?? '',
@@ -120,6 +149,7 @@ export async function generateExport(
         where: { orgId, employeeId: { not: null }, ...dateFilter('createdAt') },
         include: { employee: true, product: true },
         orderBy: { createdAt: 'desc' },
+        take,
       });
       const rows = tx.map((t) => ({
         date: t.createdAt.toISOString(),
@@ -132,7 +162,11 @@ export async function generateExport(
     }
 
     case 'SCHEDULED_REPORT': {
-      const schedules = await prisma.reportSchedule.findMany({ where: { orgId } });
+      const schedules = await prisma.reportSchedule.findMany({
+        where: { orgId },
+        orderBy: { createdAt: 'desc' },
+        take,
+      });
       const rows = schedules.map((s) => ({
         type: s.type,
         frequency: s.frequency,

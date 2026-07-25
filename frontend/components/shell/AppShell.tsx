@@ -1,12 +1,12 @@
 'use client';
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { ChevronDown, ChevronUp } from 'lucide-react';
 
 type NavItem = { label: string; href: string };
 type NavGroup = { label: string; items: NavItem[] };
-type NavSection = { label: string; groups: NavGroup[] };
+type NavSection = { label: string; groups: NavGroup[]; defaultHref: string };
 
 // ---- your groups (analytics-report-exports) --------------------------
 const ANALYTICS_NAV: NavGroup[] = [
@@ -114,9 +114,10 @@ const WENDOR_NAV: NavGroup[] = [
 ];
 
 // ---- top-level sections, switched via the top-right toggle -------------
+// defaultHref: where clicking the section in the switcher navigates to.
 const NAV_SECTIONS: NavSection[] = [
-  { label: 'Analytics & Reports', groups: ANALYTICS_NAV },
-  { label: 'Inventory & Transactions', groups: WENDOR_NAV },
+  { label: 'Analytics & Reports', groups: ANALYTICS_NAV, defaultHref: '/analytics' },
+  { label: 'Inventory & Transactions', groups: WENDOR_NAV, defaultHref: '/transactions/orders' },
 ];
 
 function CoilMark() {
@@ -149,7 +150,8 @@ function sectionForPath(pathname: string): NavSection | undefined {
   return NAV_SECTIONS.find((s) => s.groups.some((g) => groupIsActive(pathname, g)));
 }
 
-// ---- top-right segmented control: switches which section's sidebar shows
+// ---- top-right segmented control: switches section AND navigates to its
+// default page (All Analytics for Analytics & Reports, Orders for Inventory)
 function SectionSwitcher({
   active,
   onChange,
@@ -180,7 +182,9 @@ function SectionSwitcher({
   );
 }
 
-// ---- sidebar: only renders the groups/items for the currently active section
+// ---- sidebar: only renders the groups/items for the currently active
+// section. Every group starts collapsed — nothing auto-opens; a group only
+// opens when its own ▼ is clicked.
 function SidebarContent({
   section,
   pathname,
@@ -191,13 +195,13 @@ function SidebarContent({
   onNavigate?: () => void;
 }) {
   const [openGroups, setOpenGroups] = useState<Record<string, boolean>>(() =>
-    Object.fromEntries(section.groups.map((g) => [g.label, true])),
+    Object.fromEntries(section.groups.map((g) => [g.label, false])),
   );
 
-  // Reset open/closed state whenever the active section changes, so a
-  // group left collapsed in one section doesn't carry over to the other.
+  // Collapse everything again whenever the active section changes, so
+  // switching sections always starts from a clean, all-closed state.
   useEffect(() => {
-    setOpenGroups(Object.fromEntries(section.groups.map((g) => [g.label, true])));
+    setOpenGroups(Object.fromEntries(section.groups.map((g) => [g.label, false])));
   }, [section]);
 
   const toggleGroup = (label: string) =>
@@ -281,6 +285,7 @@ function pageTitleFromPath(pathname: string): string {
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname() || '/';
+  const router = useRouter();
   const [mobileOpen, setMobileOpen] = useState(false);
 
   // Default section is "Analytics & Reports" (NAV_SECTIONS[0]). If the
@@ -301,6 +306,14 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   }, [pathname]);
 
   const title = pageTitleFromPath(pathname);
+
+  // Clicking a section in the switcher sets it active AND navigates to
+  // that section's default page — All Analytics for Analytics & Reports,
+  // Orders for Inventory & Transactions.
+  const handleSectionChange = (section: NavSection) => {
+    setActiveSection(section);
+    router.push(section.defaultHref);
+  };
 
   return (
     <div className="min-h-screen bg-neutral-50">
@@ -344,7 +357,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           </div>
 
           {/* Top-right section switcher */}
-          <SectionSwitcher active={activeSection} onChange={setActiveSection} />
+          <SectionSwitcher active={activeSection} onChange={handleSectionChange} />
         </header>
         <main className="px-4 py-6 sm:px-6">{children}</main>
       </div>
