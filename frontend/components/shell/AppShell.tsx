@@ -6,78 +6,104 @@ import { ChevronDown, ChevronUp } from 'lucide-react';
 
 type NavItem = { label: string; href: string };
 type NavGroup = { label: string; items: NavItem[] };
+type NavSection = { label: string; groups: NavGroup[] };
 
-// ==================== ANALYTICS & REPORTS ====================
+// ---- your groups (analytics-report-exports) --------------------------
 const ANALYTICS_NAV: NavGroup[] = [
   {
-    label: 'Analytics & Reports',
+    label: 'Overview',
     items: [
-      // Overview
       { label: 'All Analytics', href: '/analytics' },
       { label: 'Report', href: '/report' },
       { label: 'Exports', href: '/reports' },
       { label: 'Attendance Exports', href: '/exports/attendance-exports' },
-
-      // Business Performance
+    ],
+  },
+  {
+    label: 'Business Performance',
+    items: [
       { label: 'Sales Analytics', href: '/analytics/business-performance/sales' },
       { label: 'Org Sales', href: '/analytics/business-performance/big-sales' },
       { label: 'Transactions', href: '/analytics/business-performance/transactions' },
-
-      // Operations & Workforce
+    ],
+  },
+  {
+    label: 'Operations & Workforce',
+    items: [
       { label: 'Refill Operations', href: '/analytics/operations-workforce/refill-operations' },
       { label: 'Attendance', href: '/analytics/operations-workforce/attendance' },
       { label: 'Org Attendance & Discipline', href: '/analytics/operations-workforce/org-attendance' },
       { label: 'Attendance Metrics', href: '/analytics/operations-workforce/attendance-metrics' },
       { label: 'Fleet Dashboard', href: '/analytics/operations-workforce/fleet' },
-
-      // Supply Chain
+    ],
+  },
+  {
+    label: 'Supply Chain',
+    items: [
       { label: 'Org Procurement', href: '/analytics/supply-chain/org-procurement' },
       { label: 'Vendors Dashboard', href: '/analytics/supply-chain/vendors-dashboard' },
       { label: 'Inventory Risk', href: '/analytics/supply-chain/inventory-risk' },
       { label: 'Failure Analytics', href: '/analytics/supply-chain/failure-analytics' },
       { label: 'Shipment Analytics', href: '/analytics/supply-chain/shipment-analytics' },
-
-      // Entity Analysis
+    ],
+  },
+  {
+    label: 'Entity Analysis',
+    items: [
       { label: 'Supplier Analysis', href: '/analytics/supplier' },
       { label: 'Item Analysis', href: '/analytics/entity-analysis/item' },
       { label: 'Brand Analysis', href: '/analytics/entity-analysis/brand' },
       { label: 'Machine Analytics', href: '/analytics/machine' },
       { label: 'User Analytics', href: '/analytics/user' },
-
-      // Planning
+    ],
+  },
+  {
+    label: 'Planning',
+    items: [
       { label: 'Profit Optimization', href: '/analytics/profit-optimization' },
       { label: 'Custom Analytics', href: '/analytics/custom' },
     ],
   },
 ];
 
-// ==================== INVENTORY & TRANSACTIONS ====================
+// ---- her groups (sarathi-labs-main / wendor-frontend) -----------------
 const WENDOR_NAV: NavGroup[] = [
   {
-    label: 'Inventory & Transactions',
+    label: 'Sales Ledger',
     items: [
-      // Sales Ledger
       { label: 'Orders', href: '/transactions/orders' },
       { label: 'Refunds', href: '/transactions/refunds' },
       { label: 'Ongoing & Requests', href: '/transactions/ongoing' },
       { label: 'Cancelled Carts', href: '/transactions/cancelled-cart' },
-
-      // Claims Desk
+    ],
+  },
+  {
+    label: 'Claims Desk',
+    items: [
       { label: 'Expenses', href: '/transactions/claims/expenses' },
       { label: 'Reimbursements', href: '/transactions/claims/reimbursements' },
-
-      // Fleet & Stock
+    ],
+  },
+  {
+    label: 'Fleet & Stock',
+    items: [
       { label: 'Product Catalogue', href: '/commerce/products' },
       { label: 'Stock Management', href: '/commerce/stock-management' },
       { label: 'Settlements', href: '/commerce/settlements' },
       { label: 'Wallet Users', href: '/commerce/wallet-users' },
-
-      // Accounts
+    ],
+  },
+  {
+    label: 'Accounts',
+    items: [
       { label: 'Invoices', href: '/billing/invoices' },
       { label: 'Payment History', href: '/billing/payment-history' },
       { label: 'Credit History', href: '/billing/credit-history' },
-
-      // Help Desk
+    ],
+  },
+  {
+    label: 'Help Desk',
+    items: [
       { label: 'Service Tickets', href: '/support/service-tickets' },
       { label: 'Feature Requests', href: '/support/feature-requests' },
       { label: 'Ask the Console (AI)', href: '/support/ai-assistant' },
@@ -87,8 +113,11 @@ const WENDOR_NAV: NavGroup[] = [
   },
 ];
 
-const NAV: NavGroup[] = [...ANALYTICS_NAV, ...WENDOR_NAV];
-const WENDOR_GROUP_LABELS = new Set(WENDOR_NAV.map((g) => g.label));
+// ---- top-level sections, matching the screenshot -----------------------
+const NAV_SECTIONS: NavSection[] = [
+  { label: 'Analytics & Reports', groups: ANALYTICS_NAV },
+  { label: 'Inventory & Transactions', groups: WENDOR_NAV },
+];
 
 function CoilMark() {
   // Signature mark: a 3x3 dot grid, a nod to a vending machine's coil layout.
@@ -110,15 +139,23 @@ function CoilMark() {
 }
 
 function SidebarContent({ pathname, onNavigate }: { pathname: string; onNavigate?: () => void }) {
-  const groupIsActive = (group: NavGroup) => group.items.some((i) => pathname === i.href || pathname.startsWith(`${i.href}/`));
+  const groupIsActive = (group: NavGroup) =>
+    group.items.some((i) => pathname === i.href || pathname.startsWith(`${i.href}/`));
 
-  // Every group starts open on first render if it contains the active
-  // route, otherwise open by default too (11 groups is a lot, but this
-  // matches "combined sidebar" over "hide everything" — collapse what
-  // you don't need).
-  const [openGroups, setOpenGroups] = useState<Record<string, boolean>>(() =>
-    Object.fromEntries(NAV.map((g) => [g.label, true])),
+  const sectionIsActive = (section: NavSection) => section.groups.some(groupIsActive);
+
+  // Sections and groups all start open — matches "combined sidebar" over
+  // "hide everything" — collapse what you don't need.
+  const [openSections, setOpenSections] = useState<Record<string, boolean>>(() =>
+    Object.fromEntries(NAV_SECTIONS.map((s) => [s.label, true])),
   );
+
+  const [openGroups, setOpenGroups] = useState<Record<string, boolean>>(() =>
+    Object.fromEntries(NAV_SECTIONS.flatMap((s) => s.groups).map((g) => [g.label, true])),
+  );
+
+  const toggleSection = (label: string) =>
+    setOpenSections((prev) => ({ ...prev, [label]: !prev[label] }));
 
   const toggleGroup = (label: string) =>
     setOpenGroups((prev) => ({ ...prev, [label]: !prev[label] }));
@@ -132,53 +169,88 @@ function SidebarContent({ pathname, onNavigate }: { pathname: string; onNavigate
           <p className="font-mono text-[10px] uppercase tracking-[0.14em] text-shell-muted">Ops Console</p>
         </div>
       </div>
+
       <nav className="flex-1 overflow-y-auto px-3 pb-6">
-        {NAV.map((group) => {
-          const open = openGroups[group.label];
-          const active = groupIsActive(group);
+        {NAV_SECTIONS.map((section) => {
+          const sectionOpen = openSections[section.label];
+          const sectionActive = sectionIsActive(section);
+
           return (
-            <div key={group.label} className="mb-2">
+            <div key={section.label} className="mb-4">
+              {/* Parent section */}
               <button
                 type="button"
-                onClick={() => toggleGroup(group.label)}
-                className={`mb-1 flex w-full items-center justify-between rounded-md px-2.5 py-1 font-mono text-[10px] font-medium uppercase tracking-[0.12em] transition-colors ${
-                  active ? 'text-shell-text' : 'text-shell-muted hover:text-shell-text'
+                onClick={() => toggleSection(section.label)}
+                className={`mb-2 flex w-full items-center justify-between rounded-md px-2.5 py-2 font-mono text-[11px] font-semibold uppercase tracking-[0.12em] transition-colors ${
+                  sectionActive ? 'text-shell-text' : 'text-shell-muted hover:text-shell-text'
                 }`}
-                aria-expanded={open}
+                aria-expanded={sectionOpen}
               >
-                <span>{group.label}</span>
-                {open ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+                <span>{section.label}</span>
+                {sectionOpen ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
               </button>
-              {open && (
-                <ul className="space-y-0.5 pb-3">
-                  {group.items.map((item) => {
-                    const itemActive = pathname === item.href;
+
+              {sectionOpen && (
+                <div className="ml-2 border-l border-shell-line pl-3">
+                  {section.groups.map((group) => {
+                    const groupOpen = openGroups[group.label];
+                    const groupActive = groupIsActive(group);
+
                     return (
-                      <li key={item.href}>
-                        <Link
-                          href={item.href}
-                          onClick={onNavigate}
-                          className={`flex items-center gap-2 rounded-md px-2.5 py-1.5 font-body text-[13px] transition-colors ${
-                            itemActive
-                              ? 'bg-shell-raised text-amber-400'
-                              : 'text-shell-text/80 hover:bg-shell-raised hover:text-shell-text'
+                      <div key={group.label} className="mb-2">
+                        {/* Sub-group */}
+                        <button
+                          type="button"
+                          onClick={() => toggleGroup(group.label)}
+                          className={`mb-1 flex w-full items-center justify-between rounded-md px-2 py-1 font-mono text-[10px] font-medium uppercase tracking-[0.12em] transition-colors ${
+                            groupActive ? 'text-shell-text' : 'text-shell-muted hover:text-shell-text'
                           }`}
+                          aria-expanded={groupOpen}
                         >
-                          <span
-                            className={`h-1 w-1 rounded-full ${itemActive ? 'bg-amber-400' : 'bg-shell-muted/60'}`}
-                            aria-hidden="true"
-                          />
-                          {item.label}
-                        </Link>
-                      </li>
+                          <span>{group.label}</span>
+                          {groupOpen ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+                        </button>
+
+                        {groupOpen && (
+                          <ul className="space-y-0.5 pb-2">
+                            {group.items.map((item) => {
+                              const itemActive =
+                                pathname === item.href || pathname.startsWith(`${item.href}/`);
+
+                              return (
+                                <li key={item.href}>
+                                  <Link
+                                    href={item.href}
+                                    onClick={onNavigate}
+                                    className={`flex items-center gap-2 rounded-md px-2.5 py-1.5 font-body text-[13px] transition-colors ${
+                                      itemActive
+                                        ? 'bg-shell-raised text-amber-400'
+                                        : 'text-shell-text/80 hover:bg-shell-raised hover:text-shell-text'
+                                    }`}
+                                  >
+                                    <span
+                                      className={`h-1 w-1 rounded-full ${
+                                        itemActive ? 'bg-amber-400' : 'bg-shell-muted/60'
+                                      }`}
+                                      aria-hidden="true"
+                                    />
+                                    {item.label}
+                                  </Link>
+                                </li>
+                              );
+                            })}
+                          </ul>
+                        )}
+                      </div>
                     );
                   })}
-                </ul>
+                </div>
               )}
             </div>
           );
         })}
       </nav>
+
       <div className="border-t border-shell-line px-5 py-4">
         <p className="font-mono text-[10px] uppercase tracking-[0.12em] text-shell-muted">Demo Org · WH-1</p>
       </div>
@@ -187,7 +259,7 @@ function SidebarContent({ pathname, onNavigate }: { pathname: string; onNavigate
 }
 
 function pageTitleFromPath(pathname: string): string {
-  const all = NAV.flatMap((g) => g.items);
+  const all = NAV_SECTIONS.flatMap((s) => s.groups.flatMap((g) => g.items));
   const match = all.find((i) => pathname === i.href || pathname.startsWith(`${i.href}/`));
   if (match) return match.label;
   if (pathname.startsWith('/reports')) return 'Exports';
@@ -196,9 +268,11 @@ function pageTitleFromPath(pathname: string): string {
 }
 
 function sectionLabelFromPath(pathname: string): string {
-  const group = NAV.find((g) => g.items.some((i) => pathname === i.href || pathname.startsWith(`${i.href}/`)));
-  if (group && WENDOR_GROUP_LABELS.has(group.label)) return 'Ops Console /';
-  return 'Analytics /';
+  const section = NAV_SECTIONS.find((s) =>
+    s.groups.some((g) => g.items.some((i) => pathname === i.href || pathname.startsWith(`${i.href}/`))),
+  );
+  if (!section) return 'Analytics /';
+  return section.label === 'Inventory & Transactions' ? 'Ops Console /' : 'Analytics /';
 }
 
 export function AppShell({ children }: { children: React.ReactNode }) {

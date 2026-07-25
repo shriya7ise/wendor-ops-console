@@ -14,9 +14,17 @@ import { computeNextRunAt } from './schedule.util';
 // Runs in-process on a single instance, matching how ReportsService.process()
 // already runs one-off jobs in this pass — swap both for a real queue
 // consumer together when volume needs it.
+//
+// isRunning guard: EVERY_5_MINUTES fires on a fixed schedule regardless of
+// whether the previous tick finished. If a batch of exports ever takes
+// longer than 5 minutes, overlapping ticks stack on top of each other and
+// each one holds DB connections open — that's what was exhausting the
+// Prisma connection pool (17 connections) within ~20 minutes. This guard
+// makes a tick that overlaps a still-running one skip instead of stack.
 @Injectable()
 export class ScheduledReportsCronService {
   private readonly logger = new Logger(ScheduledReportsCronService.name);
+  private isRunning = false;
 
   constructor(
     private readonly prisma: PrismaService,
@@ -25,28 +33,38 @@ export class ScheduledReportsCronService {
 
   @Cron(CronExpression.EVERY_5_MINUTES)
   async runDueSchedules() {
-    const now = new Date();
-    const due = await this.prisma.reportSchedule.findMany({
-      where: { isActive: true, nextRunAt: { lte: now } },
-    });
+    if (this.isRunning) {
+      this.logger.warn('Previous runDueSchedules() still in progress — skipping this tick.');
+      return;
+    }
+    this.isRunning = true;
 
-    if (due.length === 0) return;
-    this.logger.log(`Found ${due.length} due schedule(s) — creating export jobs.`);
+    try {
+      const now = new Date();
+      const due = await this.prisma.reportSchedule.findMany({
+        where: { isActive: true, nextRunAt: { lte: now } },
+      });
 
-    for (const schedule of due) {
-      try {
-        await this.reportsService.create(schedule.orgId, 'scheduler', {
-          type: schedule.type,
-          filters: (schedule.filters as Record<string, unknown>) ?? {},
-        });
+      if (due.length === 0) return;
+      this.logger.log(`Found ${due.length} due schedule(s) — creating export jobs.`);
 
-        await this.prisma.reportSchedule.update({
-          where: { id: schedule.id },
-          data: { lastRunAt: now, nextRunAt: computeNextRunAt(schedule.frequency, now) },
-        });
-      } catch (err) {
-        this.logger.error(`Failed to run schedule ${schedule.id}`, err as Error);
+      for (const schedule of due) {
+        try {
+          await this.reportsService.create(schedule.orgId, 'scheduler', {
+            type: schedule.type,
+            filters: (schedule.filters as Record<string, unknown>) ?? {},
+          });
+
+          await this.prisma.reportSchedule.update({
+            where: { id: schedule.id },
+            data: { lastRunAt: now, nextRunAt: computeNextRunAt(schedule.frequency, now) },
+          });
+        } catch (err) {
+          this.logger.error(`Failed to run schedule ${schedule.id}`, err as Error);
+        }
       }
+    } finally {
+      this.isRunning = false;
     }
   }
 }
