@@ -7,103 +7,77 @@ import { ChevronDown, ChevronUp } from 'lucide-react';
 type NavItem = { label: string; href: string };
 type NavGroup = { label: string; items: NavItem[] };
 
-// ---- your groups (analytics-report-exports) --------------------------
+// ==================== ANALYTICS & REPORTS ====================
 const ANALYTICS_NAV: NavGroup[] = [
   {
-    label: 'Overview',
+    label: 'Analytics & Reports',
     items: [
+      // Overview
       { label: 'All Analytics', href: '/analytics' },
       { label: 'Report', href: '/report' },
       { label: 'Exports', href: '/reports' },
       { label: 'Attendance Exports', href: '/exports/attendance-exports' },
-    ],
-  },
-  {
-    label: 'Business Performance',
-    items: [
+
+      // Business Performance
       { label: 'Sales Analytics', href: '/analytics/business-performance/sales' },
       { label: 'Org Sales', href: '/analytics/business-performance/big-sales' },
       { label: 'Transactions', href: '/analytics/business-performance/transactions' },
-    ],
-  },
-  {
-    label: 'Operations & Workforce',
-    items: [
+
+      // Operations & Workforce
       { label: 'Refill Operations', href: '/analytics/operations-workforce/refill-operations' },
       { label: 'Attendance', href: '/analytics/operations-workforce/attendance' },
       { label: 'Org Attendance & Discipline', href: '/analytics/operations-workforce/org-attendance' },
       { label: 'Attendance Metrics', href: '/analytics/operations-workforce/attendance-metrics' },
       { label: 'Fleet Dashboard', href: '/analytics/operations-workforce/fleet' },
-    ],
-  },
-  {
-    label: 'Supply Chain',
-    items: [
+
+      // Supply Chain
       { label: 'Org Procurement', href: '/analytics/supply-chain/org-procurement' },
       { label: 'Vendors Dashboard', href: '/analytics/supply-chain/vendors-dashboard' },
       { label: 'Inventory Risk', href: '/analytics/supply-chain/inventory-risk' },
       { label: 'Failure Analytics', href: '/analytics/supply-chain/failure-analytics' },
       { label: 'Shipment Analytics', href: '/analytics/supply-chain/shipment-analytics' },
-    ],
-  },
-  {
-    label: 'Entity Analysis',
-    items: [
+
+      // Entity Analysis
       { label: 'Supplier Analysis', href: '/analytics/supplier' },
       { label: 'Item Analysis', href: '/analytics/entity-analysis/item' },
       { label: 'Brand Analysis', href: '/analytics/entity-analysis/brand' },
       { label: 'Machine Analytics', href: '/analytics/machine' },
       { label: 'User Analytics', href: '/analytics/user' },
-    ],
-  },
-  {
-    label: 'Planning',
-    items: [
+
+      // Planning
       { label: 'Profit Optimization', href: '/analytics/profit-optimization' },
       { label: 'Custom Analytics', href: '/analytics/custom' },
     ],
   },
 ];
 
-// ---- her groups (sarathi-labs-main / wendor-frontend) -----------------
-// Same hrefs/labels/order as her original Sidebar.tsx NAV_GROUPS.
+// ==================== INVENTORY & TRANSACTIONS ====================
 const WENDOR_NAV: NavGroup[] = [
   {
-    label: 'Sales Ledger',
+    label: 'Inventory & Transactions',
     items: [
+      // Sales Ledger
       { label: 'Orders', href: '/transactions/orders' },
       { label: 'Refunds', href: '/transactions/refunds' },
       { label: 'Ongoing & Requests', href: '/transactions/ongoing' },
       { label: 'Cancelled Carts', href: '/transactions/cancelled-cart' },
-    ],
-  },
-  {
-    label: 'Claims Desk',
-    items: [
+
+      // Claims Desk
       { label: 'Expenses', href: '/transactions/claims/expenses' },
       { label: 'Reimbursements', href: '/transactions/claims/reimbursements' },
-    ],
-  },
-  {
-    label: 'Fleet & Stock',
-    items: [
+
+      // Fleet & Stock
       { label: 'Product Catalogue', href: '/commerce/products' },
       { label: 'Stock Management', href: '/commerce/stock-management' },
       { label: 'Settlements', href: '/commerce/settlements' },
       { label: 'Wallet Users', href: '/commerce/wallet-users' },
-    ],
-  },
-  {
-    label: 'Accounts',
-    items: [
+
+      // Accounts
       { label: 'Invoices', href: '/billing/invoices' },
       { label: 'Payment History', href: '/billing/payment-history' },
       { label: 'Credit History', href: '/billing/credit-history' },
-    ],
-  },
-  {
-    label: 'Help Desk',
-    items: [
+
+      // Help Desk
       { label: 'Service Tickets', href: '/support/service-tickets' },
       { label: 'Feature Requests', href: '/support/feature-requests' },
       { label: 'Ask the Console (AI)', href: '/support/ai-assistant' },
